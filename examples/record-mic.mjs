@@ -1,6 +1,12 @@
 #!/usr/bin/env node
 
-import { MicrophoneRecorder, listAudioDevices, getMicrophonePermissionStatus, requestMicrophonePermission, openSystemSettings } from '../dist/index.js'
+import {
+  MicrophoneRecorder,
+  listAudioDevices,
+  getMicrophonePermissionStatus,
+  requestMicrophonePermission,
+  openSystemSettings,
+} from '../dist/index.js'
 import { writeFileSync } from 'fs'
 import { parseArgs } from 'util'
 
@@ -44,7 +50,7 @@ Examples:
 // List devices if requested
 if (values['list-devices']) {
   console.log('\nAvailable input devices:\n')
-  const devices = listAudioDevices().filter(d => d.isInput)
+  const devices = listAudioDevices().filter((d) => d.isInput)
   for (const device of devices) {
     const defaultMarker = device.isDefault ? ' (default)' : ''
     console.log(`  ${device.id}`)
