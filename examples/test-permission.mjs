@@ -1,27 +1,31 @@
 #!/usr/bin/env node
 
 import {
-  getPermissionStatus,
-  isPermissionAvailable,
-  requestPermission,
+  getSystemAudioPermissionStatus,
+  isSystemAudioPermissionAvailable,
+  requestSystemAudioPermission,
   openSystemSettings,
-  ensurePermission,
+  ensureSystemAudioPermission,
   PermissionError,
 } from '../dist/index.js'
 
-console.log('Testing AudioTee Permission API\n')
+console.log('Testing System Audio Permission API\n')
 
-// Check if TCC API is available
-const available = isPermissionAvailable()
-console.log(`TCC API available: ${available}`)
+// Check if permission API is available
+// macOS: Uses TCC private API
+// Windows: Always returns true (no permission needed for loopback)
+const available = isSystemAudioPermissionAvailable()
+console.log(`Permission API available: ${available}`)
 
 if (!available) {
-  console.log('⚠️  TCC API not available - permission checking may not work')
+  console.log('⚠️  Permission API not available - permission checking may not work')
   process.exit(0)
 }
 
 // Check current permission status
-const status = getPermissionStatus()
+// macOS: Returns 'unknown', 'denied', or 'authorized'
+// Windows: Always returns 'authorized'
+const status = getSystemAudioPermissionStatus()
 console.log(`Current permission status: ${status}`)
 
 if (status === 'authorized') {
@@ -32,7 +36,7 @@ if (status === 'authorized') {
 if (status === 'denied') {
   console.log('❌ Permission denied. Opening System Settings...')
   openSystemSettings()
-  console.log('\nPlease enable "System Audio Recording Only" for your terminal app.')
+  console.log('\nmacOS: Please enable "System Audio Recording Only" for your terminal app.')
   console.log('Then run this test again.')
   process.exit(1)
 }
@@ -41,7 +45,7 @@ if (status === 'denied') {
 console.log('\n📋 Requesting permission...')
 
 try {
-  const granted = await requestPermission()
+  const granted = await requestSystemAudioPermission()
   console.log(`Permission request result: ${granted ? 'granted' : 'denied'}`)
 
   if (granted) {
@@ -50,7 +54,7 @@ try {
     console.log('❌ Permission denied or dismissed.')
     console.log('\nOpening System Settings...')
     openSystemSettings()
-    console.log('Please enable "System Audio Recording Only" for your terminal app.')
+    console.log('macOS: Please enable "System Audio Recording Only" for your terminal app.')
   }
 } catch (error) {
   console.error('Error requesting permission:', error)

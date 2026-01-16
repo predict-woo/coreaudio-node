@@ -49,6 +49,7 @@ export class SystemAudioRecorder extends BaseAudioRecorder {
           chunkDurationMs: this.options.chunkDurationMs,
           mute: this.options.mute,
           stereo: this.options.stereo,
+          emitSilence: this.options.emitSilence ?? true,
           includeProcesses: this.options.includeProcesses,
           excludeProcesses: this.options.excludeProcesses,
         })

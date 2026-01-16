@@ -102,8 +102,8 @@ class AudioRecorderSession {
 
 /// Creates a new audio recorder session
 /// Returns an opaque handle that must be freed with coreaudio_destroy
-@_cdecl("coreaudio_create")
-public func coreaudio_create(
+@_cdecl("audio_create")
+public func audio_create(
     dataCallback: AudioDataCallback?,
     eventCallback: AudioEventCallback?,
     metadataCallback: AudioMetadataCallback?,
@@ -120,13 +120,14 @@ public func coreaudio_create(
 }
 
 /// Start system audio capture
-@_cdecl("coreaudio_start_system_audio")
-public func coreaudio_start_system_audio(
+@_cdecl("audio_start_system_audio")
+public func audio_start_system_audio(
     handle: AudioRecorderHandle,
     sampleRate: Double,           // 0 for native rate
     chunkDurationMs: Double,      // chunk duration in milliseconds
     mute: Bool,
     isMono: Bool,
+    emitSilence: Bool,            // ignored on macOS - always emits continuous audio
     includeProcesses: UnsafePointer<Int32>?,
     includeProcessCount: Int32,
     excludeProcesses: UnsafePointer<Int32>?,
@@ -234,13 +235,14 @@ public func coreaudio_start_system_audio(
 }
 
 /// Start microphone capture
-@_cdecl("coreaudio_start_microphone")
-public func coreaudio_start_microphone(
+@_cdecl("audio_start_microphone")
+public func audio_start_microphone(
     handle: AudioRecorderHandle,
     sampleRate: Double,
     chunkDurationMs: Double,
     isMono: Bool,
-    deviceUID: UnsafePointer<CChar>?,  // NULL for default device
+    emitSilence: Bool,                  // ignored on macOS - always emits continuous audio
+    deviceUID: UnsafePointer<CChar>?,   // NULL for default device
     gain: Double                        // 0.0 to 1.0
 ) -> Int32 {
     guard let session = Unmanaged<AudioRecorderSession>.fromOpaque(handle).takeUnretainedValue() as AudioRecorderSession? else {
@@ -313,8 +315,8 @@ public func coreaudio_start_microphone(
 }
 
 /// Stops the audio capture session
-@_cdecl("coreaudio_stop")
-public func coreaudio_stop(handle: AudioRecorderHandle) -> Int32 {
+@_cdecl("audio_stop")
+public func audio_stop(handle: AudioRecorderHandle) -> Int32 {
     guard let session = Unmanaged<AudioRecorderSession>.fromOpaque(handle).takeUnretainedValue() as AudioRecorderSession? else {
         return -1
     }
@@ -341,18 +343,18 @@ public func coreaudio_stop(handle: AudioRecorderHandle) -> Int32 {
 }
 
 /// Destroys the session and frees resources
-@_cdecl("coreaudio_destroy")
-public func coreaudio_destroy(handle: AudioRecorderHandle) {
+@_cdecl("audio_destroy")
+public func audio_destroy(handle: AudioRecorderHandle) {
     // Stop if running
-    _ = coreaudio_stop(handle: handle)
+    _ = audio_stop(handle: handle)
 
     // Release the session
     Unmanaged<AudioRecorderSession>.fromOpaque(handle).release()
 }
 
 /// Returns whether the session is currently recording
-@_cdecl("coreaudio_is_running")
-public func coreaudio_is_running(handle: AudioRecorderHandle) -> Bool {
+@_cdecl("audio_is_running")
+public func audio_is_running(handle: AudioRecorderHandle) -> Bool {
     guard let session = Unmanaged<AudioRecorderSession>.fromOpaque(handle).takeUnretainedValue() as AudioRecorderSession? else {
         return false
     }

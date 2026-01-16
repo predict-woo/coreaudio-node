@@ -90,13 +90,13 @@ private class TCCFramework {
 
 // MARK: - C-Compatible API (System Audio Permission - TCC Private API)
 
-@_cdecl("coreaudio_system_audio_permission_status")
-public func coreaudio_system_audio_permission_status() -> Int32 {
+@_cdecl("audio_system_permission_status")
+public func audio_system_permission_status() -> Int32 {
     return TCCFramework.shared.checkStatus().rawValue
 }
 
-@_cdecl("coreaudio_system_audio_permission_request")
-public func coreaudio_system_audio_permission_request(
+@_cdecl("audio_system_permission_request")
+public func audio_system_permission_request(
     callback: @escaping @convention(c) (Bool, UnsafeMutableRawPointer?) -> Void,
     context: UnsafeMutableRawPointer?
 ) {
@@ -105,21 +105,21 @@ public func coreaudio_system_audio_permission_request(
     }
 }
 
-@_cdecl("coreaudio_system_audio_permission_available")
-public func coreaudio_system_audio_permission_available() -> Bool {
+@_cdecl("audio_system_permission_available")
+public func audio_system_permission_available() -> Bool {
     return TCCFramework.shared.isAvailable
 }
 
-@_cdecl("coreaudio_open_system_settings")
-public func coreaudio_open_system_settings() -> Bool {
+@_cdecl("audio_open_system_settings")
+public func audio_open_system_settings() -> Bool {
     let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!
     return NSWorkspace.shared.open(url)
 }
 
 // MARK: - Microphone Permission (AVFoundation Public API)
 
-@_cdecl("coreaudio_mic_permission_status")
-public func coreaudio_mic_permission_status() -> Int32 {
+@_cdecl("audio_mic_permission_status")
+public func audio_mic_permission_status() -> Int32 {
     switch AVCaptureDevice.authorizationStatus(for: .audio) {
     case .notDetermined:
         return 0  // unknown
@@ -132,8 +132,8 @@ public func coreaudio_mic_permission_status() -> Int32 {
     }
 }
 
-@_cdecl("coreaudio_mic_permission_request")
-public func coreaudio_mic_permission_request(
+@_cdecl("audio_mic_permission_request")
+public func audio_mic_permission_request(
     callback: @escaping @convention(c) (Bool, UnsafeMutableRawPointer?) -> Void,
     context: UnsafeMutableRawPointer?
 ) {

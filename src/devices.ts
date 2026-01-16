@@ -18,8 +18,8 @@ function loadAddon(): NativeAddon {
   if (addon) return addon
 
   const paths = [
-    path.join(__dirname, '..', 'build', 'Release', 'coreaudio.node'),
-    path.join(__dirname, '..', '..', 'build', 'Release', 'coreaudio.node'),
+    path.join(__dirname, '..', 'build', 'Release', 'native_audio.node'),
+    path.join(__dirname, '..', '..', 'build', 'Release', 'native_audio.node'),
   ]
 
   for (const addonPath of paths) {
@@ -31,7 +31,7 @@ function loadAddon(): NativeAddon {
     }
   }
 
-  throw new Error('Failed to load native coreaudio addon')
+  throw new Error('Failed to load native audio addon')
 }
 
 /**

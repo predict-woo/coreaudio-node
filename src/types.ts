@@ -17,12 +17,34 @@ export interface AudioRecorderOptions {
   sampleRate?: number
   chunkDurationMs?: number
   stereo?: boolean
+  /**
+   * Emit silent audio chunks when no audio is playing.
+   * 
+   * **macOS:** Always emits continuous audio (this option has no effect).
+   * **Windows:** By default (true), generates silent buffers to match macOS behavior.
+   * Set to false for efficiency if you only want events when audio is actually playing.
+   * 
+   * @default true
+   */
+  emitSilence?: boolean
 }
 
 // System audio specific options
 export interface SystemAudioRecorderOptions extends AudioRecorderOptions {
+  /**
+   * Mute the captured processes' audio output.
+   * **macOS only** - This option has no effect on Windows.
+   */
   mute?: boolean
+  /**
+   * Only capture audio from these process IDs.
+   * **Note:** On Windows, only the first process ID is used (OS limitation).
+   */
   includeProcesses?: number[]
+  /**
+   * Capture audio from all processes except these process IDs.
+   * **Note:** On Windows, only the first process ID is used (OS limitation).
+   */
   excludeProcesses?: number[]
 }
 
@@ -72,6 +94,7 @@ export interface AudioRecorderNativeClass {
     chunkDurationMs?: number
     mute?: boolean
     stereo?: boolean
+    emitSilence?: boolean
     includeProcesses?: number[]
     excludeProcesses?: number[]
   }): void
@@ -79,6 +102,7 @@ export interface AudioRecorderNativeClass {
     sampleRate?: number
     chunkDurationMs?: number
     stereo?: boolean
+    emitSilence?: boolean
     deviceId?: string
     gain?: number
   }): void

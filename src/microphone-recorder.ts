@@ -53,6 +53,7 @@ export class MicrophoneRecorder extends BaseAudioRecorder {
           sampleRate: this.options.sampleRate,
           chunkDurationMs: this.options.chunkDurationMs,
           stereo: this.options.stereo,
+          emitSilence: this.options.emitSilence ?? true,
           deviceId: this.options.deviceId,
           gain: this.options.gain,
         })

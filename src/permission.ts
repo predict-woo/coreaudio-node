@@ -8,11 +8,11 @@ const require = createRequire(import.meta.url)
 export type PermissionStatus = 'unknown' | 'denied' | 'authorized'
 
 interface NativeAddon {
-  // System audio permission (TCC private API)
+  // System audio permission
   getSystemAudioPermissionStatus(): PermissionStatus
   isSystemAudioPermissionAvailable(): boolean
   requestSystemAudioPermission(callback: (granted: boolean) => void): void
-  // Microphone permission (AVFoundation public API)
+  // Microphone permission
   getMicPermissionStatus(): PermissionStatus
   requestMicPermission(callback: (granted: boolean) => void): void
   // Shared
@@ -25,8 +25,8 @@ function loadAddon(): NativeAddon {
   if (addon) return addon
 
   const paths = [
-    path.join(__dirname, '..', 'build', 'Release', 'coreaudio.node'),
-    path.join(__dirname, '..', '..', 'build', 'Release', 'coreaudio.node'),
+    path.join(__dirname, '..', 'build', 'Release', 'native_audio.node'),
+    path.join(__dirname, '..', '..', 'build', 'Release', 'native_audio.node'),
   ]
 
   for (const addonPath of paths) {
@@ -38,16 +38,19 @@ function loadAddon(): NativeAddon {
     }
   }
 
-  throw new Error('Failed to load native coreaudio addon')
+  throw new Error('Failed to load native audio addon')
 }
 
 // ============================================================================
-// System Audio Permission (uses TCC private API)
+// System Audio Permission
 // ============================================================================
 
 /**
  * Check the current system audio recording permission status.
- * Uses macOS TCC private API - may not be available on all systems.
+ *
+ * **macOS:** Uses TCC private API - may not be available on all systems.
+ * **Windows:** Always returns 'authorized' (loopback capture doesn't require permission).
+ *
  * @returns 'authorized' | 'denied' | 'unknown'
  */
 export function getSystemAudioPermissionStatus(): PermissionStatus {
@@ -55,8 +58,10 @@ export function getSystemAudioPermissionStatus(): PermissionStatus {
 }
 
 /**
- * Check if the TCC permission API is available.
- * This uses private macOS APIs that may not be available on all systems.
+ * Check if the permission API is available.
+ *
+ * **macOS:** This uses private macOS APIs that may not be available on all systems.
+ * **Windows:** Always returns true.
  */
 export function isSystemAudioPermissionAvailable(): boolean {
   return loadAddon().isSystemAudioPermissionAvailable()
@@ -64,8 +69,11 @@ export function isSystemAudioPermissionAvailable(): boolean {
 
 /**
  * Request system audio recording permission.
- * Note: This may not show a dialog - macOS doesn't have a standard permission
+ *
+ * **macOS:** This may not show a dialog - macOS doesn't have a standard permission
  * dialog for system audio. Users may need to manually add the app in System Settings.
+ * **Windows:** Always resolves to true immediately (no permission needed).
+ *
  * @returns Promise that resolves to true if permission was granted
  */
 export function requestSystemAudioPermission(): Promise<boolean> {
@@ -77,12 +85,15 @@ export function requestSystemAudioPermission(): Promise<boolean> {
 }
 
 // ============================================================================
-// Microphone Permission (uses AVFoundation public API)
+// Microphone Permission
 // ============================================================================
 
 /**
  * Check the current microphone recording permission status.
- * Uses the standard AVFoundation API.
+ *
+ * **macOS:** Uses the standard AVFoundation API.
+ * **Windows:** Checks if microphone devices are accessible.
+ *
  * @returns 'authorized' | 'denied' | 'unknown'
  */
 export function getMicrophonePermissionStatus(): PermissionStatus {
@@ -91,7 +102,10 @@ export function getMicrophonePermissionStatus(): PermissionStatus {
 
 /**
  * Request microphone recording permission.
- * This will show the standard macOS permission dialog if permission hasn't been determined.
+ *
+ * **macOS:** This will show the standard macOS permission dialog if permission hasn't been determined.
+ * **Windows:** Windows 10+ may show a permission prompt automatically when accessing the mic.
+ *
  * @returns Promise that resolves to true if permission was granted
  */
 export function requestMicrophonePermission(): Promise<boolean> {
@@ -107,9 +121,12 @@ export function requestMicrophonePermission(): Promise<boolean> {
 // ============================================================================
 
 /**
- * Open System Settings to the Screen & System Audio Recording pane.
- * Use this when the user needs to manually grant permission.
- * @returns true if System Settings was opened successfully
+ * Open system settings to the appropriate audio/privacy pane.
+ *
+ * **macOS:** Opens System Settings to the Screen & System Audio Recording pane.
+ * **Windows:** Opens Windows Sound Settings.
+ *
+ * @returns true if settings was opened successfully
  */
 export function openSystemSettings(): boolean {
   return loadAddon().openSystemSettings()

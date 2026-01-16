@@ -1,30 +1,53 @@
-# coreaudio-node
+# native-audio-node
 
-Native macOS audio capture for Node.js - system audio and microphone recording.
+Native audio capture for Node.js - system audio and microphone recording for **macOS** and **Windows**.
 
-A TypeScript-first library that provides low-latency access to macOS Core Audio for capturing both system audio output (everything playing through speakers/headphones) and microphone input.
+A TypeScript-first library that provides low-latency access to native audio APIs for capturing both system audio output (everything playing through speakers/headphones) and microphone input.
 
 ## Features
 
-- **System Audio Capture** - Record all audio playing on your Mac, or filter by specific processes
+- **System Audio Capture** - Record all audio playing on your system, or filter by specific processes
 - **Microphone Recording** - Capture from any audio input device with gain control
+- **Cross-Platform** - Native support for macOS (Core Audio) and Windows (WASAPI)
 - **Low Latency** - 10ms event polling for real-time audio processing
 - **Sample Rate Conversion** - Built-in resampling to common rates (8kHz-48kHz)
 - **Process Filtering** - Include or exclude specific application audio
 - **Device Selection** - Choose from available input devices programmatically
 - **TypeScript Native** - Full type definitions and ESM-first design
-- **Universal Binary** - Supports both Apple Silicon (arm64) and Intel (x86_64) Macs
+
+## Platform Support
+
+| Feature | macOS | Windows |
+|---------|-------|---------|
+| System audio capture | ✅ | ✅ |
+| Microphone capture | ✅ | ✅ |
+| Process filtering (include) | ✅ Multiple PIDs | ✅ Single PID* |
+| Process filtering (exclude) | ✅ Multiple PIDs | ✅ Single PID* |
+| Mute captured processes | ✅ | ❌ |
+| Continuous audio stream | ✅ Always | ✅ Via `emitSilence`** |
+| Sample rate conversion | ✅ | ✅ |
+| Device enumeration | ✅ | ✅ |
+
+*Windows limitation: WASAPI process loopback only supports a single process ID per capture stream.
+
+**macOS always emits continuous audio data (silence when nothing plays). Windows WASAPI only emits when audio is playing, but `emitSilence: true` (default) generates silent buffers to match macOS behavior.
 
 ## Requirements
 
+### macOS
 - **macOS 14.2+** (Sonoma or later)
 - **Node.js 20+**
-- Xcode Command Line Tools (for native addon compilation)
+- Xcode Command Line Tools
+
+### Windows
+- **Windows 10 2004+** (Build 19041 or later)
+- **Node.js 20+**
+- Visual Studio Build Tools with C++ workload
 
 ## Installation
 
 ```bash
-npm install coreaudio-node
+npm install native-audio-node
 ```
 
 The native addon is compiled during installation via `cmake-js`.
@@ -34,12 +57,12 @@ The native addon is compiled during installation via `cmake-js`.
 ### Recording System Audio
 
 ```typescript
-import { SystemAudioRecorder } from 'coreaudio-node'
+import { SystemAudioRecorder } from 'native-audio-node'
 
 const recorder = new SystemAudioRecorder({
   sampleRate: 16000,      // Resample to 16kHz
   chunkDurationMs: 100,   // 100ms audio chunks
-  mute: false,            // Don't mute system audio
+  mute: false,            // Don't mute system audio (macOS only)
 })
 
 recorder.on('metadata', (meta) => {
@@ -62,7 +85,7 @@ setTimeout(async () => {
 ### Recording Microphone
 
 ```typescript
-import { MicrophoneRecorder, listAudioDevices } from 'coreaudio-node'
+import { MicrophoneRecorder, listAudioDevices } from 'native-audio-node'
 
 // List available input devices
 const devices = listAudioDevices().filter(d => d.isInput)
@@ -90,7 +113,7 @@ await recorder.start()
 Captures system audio output (everything playing through speakers/headphones).
 
 ```typescript
-import { SystemAudioRecorder } from 'coreaudio-node'
+import { SystemAudioRecorder } from 'native-audio-node'
 
 const recorder = new SystemAudioRecorder(options?: SystemAudioRecorderOptions)
 ```
@@ -102,9 +125,10 @@ const recorder = new SystemAudioRecorder(options?: SystemAudioRecorderOptions)
 | `sampleRate` | `number` | Device native | Target sample rate (8000, 16000, 22050, 24000, 32000, 44100, 48000) |
 | `chunkDurationMs` | `number` | `200` | Audio chunk duration in milliseconds (0-5000) |
 | `stereo` | `boolean` | `false` | Record in stereo (true) or mono (false) |
-| `mute` | `boolean` | `false` | Mute system audio while recording |
-| `includeProcesses` | `number[]` | - | Only capture audio from these process IDs |
-| `excludeProcesses` | `number[]` | - | Exclude audio from these process IDs |
+| `mute` | `boolean` | `false` | Mute system audio while recording (**macOS only**) |
+| `emitSilence` | `boolean` | `true` | Emit silent chunks when no audio is playing (**Windows only** - macOS always emits) |
+| `includeProcesses` | `number[]` | - | Only capture audio from these process IDs (Windows: first PID only) |
+| `excludeProcesses` | `number[]` | - | Exclude audio from these process IDs (Windows: first PID only) |
 
 **Methods:**
 
@@ -122,7 +146,7 @@ const recorder = new SystemAudioRecorder(options?: SystemAudioRecorderOptions)
 Captures audio from microphone input devices.
 
 ```typescript
-import { MicrophoneRecorder } from 'coreaudio-node'
+import { MicrophoneRecorder } from 'native-audio-node'
 
 const recorder = new MicrophoneRecorder(options?: MicrophoneRecorderOptions)
 ```
@@ -134,6 +158,7 @@ const recorder = new MicrophoneRecorder(options?: MicrophoneRecorderOptions)
 | `sampleRate` | `number` | Device native | Target sample rate |
 | `chunkDurationMs` | `number` | `200` | Audio chunk duration in milliseconds |
 | `stereo` | `boolean` | `false` | Record in stereo or mono |
+| `emitSilence` | `boolean` | `true` | Emit silent chunks when no audio (**Windows only** - macOS always emits) |
 | `deviceId` | `string` | System default | Device UID (from `listAudioDevices()`) |
 | `gain` | `number` | `1.0` | Microphone gain (0.0-2.0) |
 
@@ -160,25 +185,6 @@ interface AudioRecorderEvents {
 | `start` | - | Recording has started |
 | `stop` | - | Recording has stopped |
 | `error` | `Error` | An error occurred |
-
-**Usage:**
-
-```typescript
-recorder.on('data', (chunk) => { /* handle audio */ })
-recorder.on('metadata', (meta) => { /* handle format info */ })
-recorder.on('start', () => { /* recording started */ })
-recorder.on('stop', () => { /* recording stopped */ })
-recorder.on('error', (err) => { /* handle error */ })
-
-// One-time listener
-recorder.once('start', () => { /* only fires once */ })
-
-// Remove listener
-recorder.off('data', myHandler)
-
-// Remove all listeners
-recorder.removeAllListeners('data')
-```
 
 ---
 
@@ -228,16 +234,10 @@ import {
   listAudioDevices,
   getDefaultInputDevice,
   getDefaultOutputDevice
-} from 'coreaudio-node'
+} from 'native-audio-node'
 
 // List all audio devices
 const devices = listAudioDevices()
-console.log(devices)
-// [
-//   { id: 'BuiltInMicrophoneDevice', name: 'MacBook Pro Microphone', isInput: true, ... },
-//   { id: 'BuiltInSpeakerDevice', name: 'MacBook Pro Speakers', isOutput: true, ... },
-//   ...
-// ]
 
 // Get input devices only
 const microphones = devices.filter(d => d.isInput)
@@ -254,11 +254,14 @@ const defaultSpeaker = getDefaultOutputDevice() // Returns device UID or null
 
 ### Permission Management
 
-macOS requires permission for audio recording. System audio and microphone have different permission systems.
+#### Platform Differences
+
+| Permission | macOS | Windows |
+|------------|-------|---------|
+| System Audio | Requires TCC permission | No permission needed |
+| Microphone | Requires user consent | May prompt via Windows Privacy |
 
 #### System Audio Permission
-
-Uses macOS TCC (Transparency, Consent, and Control) private API. Permission must often be granted manually in System Settings.
 
 ```typescript
 import {
@@ -268,21 +271,17 @@ import {
   ensureSystemAudioPermission,
   openSystemSettings,
   PermissionError,
-} from 'coreaudio-node'
+} from 'native-audio-node'
 
-// Check if TCC API is available
-if (isSystemAudioPermissionAvailable()) {
-  const status = getSystemAudioPermissionStatus()
-  // Returns: 'unknown' | 'denied' | 'authorized'
+// Check current status
+// macOS: Returns 'unknown', 'denied', or 'authorized'
+// Windows: Always returns 'authorized'
+const status = getSystemAudioPermissionStatus()
 
-  if (status !== 'authorized') {
-    // Open System Settings to permission pane
-    openSystemSettings()
-    console.log('Please grant "System Audio Recording Only" permission')
-  }
-}
+// Open system settings (macOS: Privacy pane, Windows: Sound settings)
+openSystemSettings()
 
-// Or use the convenience function (throws PermissionError if denied)
+// Ensure permission is granted (throws PermissionError if denied on macOS)
 try {
   await ensureSystemAudioPermission()
   // Permission granted, safe to start recording
@@ -295,25 +294,19 @@ try {
 
 #### Microphone Permission
 
-Uses standard AVFoundation API with system permission dialog.
-
 ```typescript
 import {
   getMicrophonePermissionStatus,
   requestMicrophonePermission,
   ensureMicrophonePermission,
   PermissionError,
-} from 'coreaudio-node'
+} from 'native-audio-node'
 
 // Check current status
 const status = getMicrophonePermissionStatus()
-// Returns: 'unknown' | 'denied' | 'authorized'
 
-// Request permission (shows system dialog if 'unknown')
+// Request permission (shows system dialog if needed)
 const granted = await requestMicrophonePermission()
-if (granted) {
-  // Start recording
-}
 
 // Or use convenience function
 try {
@@ -325,84 +318,19 @@ try {
 }
 ```
 
-#### Permission Types
-
-```typescript
-type PermissionStatus = 'unknown' | 'denied' | 'authorized'
-
-class PermissionError extends Error {
-  status: PermissionStatus
-}
-```
-
----
-
-## Audio Format Details
-
-### Native Format
-
-Audio is captured in the device's native format, typically:
-- **Sample Rate:** 48000 Hz (device dependent)
-- **Bit Depth:** 32-bit IEEE float
-- **Channels:** Mono or stereo
-
-### After Sample Rate Conversion
-
-When you specify a `sampleRate` option, audio is converted:
-- **Sample Rate:** Your specified rate
-- **Bit Depth:** 16-bit signed integer
-- **Channels:** Mono (unless `stereo: true`)
-- **Encoding:** `pcm_s16le` (little-endian)
-
-### Supported Sample Rates
-
-8000, 16000, 22050, 24000, 32000, 44100, 48000 Hz
-
 ---
 
 ## Examples
 
-### Record to WAV File
-
-```typescript
-import { SystemAudioRecorder } from 'coreaudio-node'
-import { writeFileSync } from 'fs'
-
-const chunks: Buffer[] = []
-let metadata: AudioMetadata
-
-const recorder = new SystemAudioRecorder({ sampleRate: 16000 })
-
-recorder.on('metadata', (meta) => { metadata = meta })
-recorder.on('data', (chunk) => { chunks.push(chunk.data) })
-
-await recorder.start()
-
-// Record for 5 seconds
-await new Promise(resolve => setTimeout(resolve, 5000))
-
-await recorder.stop()
-
-// Combine chunks and write with WAV header
-const audioData = Buffer.concat(chunks)
-const wavFile = createWavFile(audioData, metadata)
-writeFileSync('recording.wav', wavFile)
-```
-
 ### Process-Specific Recording
 
 ```typescript
-import { SystemAudioRecorder } from 'coreaudio-node'
-import { execSync } from 'child_process'
+import { SystemAudioRecorder } from 'native-audio-node'
 
-// Get Chrome's process ID
-const chromePid = parseInt(
-  execSync("pgrep -x 'Google Chrome'").toString().trim()
-)
-
+// Record only from a specific process
 const recorder = new SystemAudioRecorder({
-  includeProcesses: [chromePid],
-  mute: true,  // Mute Chrome audio while recording
+  includeProcesses: [12345],  // Process ID
+  // Note: On Windows, only the first PID is used
 })
 
 await recorder.start()
@@ -411,7 +339,7 @@ await recorder.start()
 ### Real-time Audio Processing
 
 ```typescript
-import { MicrophoneRecorder } from 'coreaudio-node'
+import { MicrophoneRecorder } from 'native-audio-node'
 
 const recorder = new MicrophoneRecorder({
   sampleRate: 16000,
@@ -433,94 +361,40 @@ recorder.on('data', (chunk) => {
 await recorder.start()
 ```
 
-### Device Selection UI
-
-```typescript
-import { MicrophoneRecorder, listAudioDevices } from 'coreaudio-node'
-import readline from 'readline'
-
-const devices = listAudioDevices().filter(d => d.isInput)
-
-console.log('Select a microphone:')
-devices.forEach((d, i) => {
-  const marker = d.isDefault ? ' (default)' : ''
-  console.log(`  ${i + 1}. ${d.name}${marker}`)
-})
-
-const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
-const answer = await new Promise<string>(resolve => rl.question('> ', resolve))
-rl.close()
-
-const selected = devices[parseInt(answer) - 1]
-const recorder = new MicrophoneRecorder({ deviceId: selected.id })
-
-await recorder.start()
-```
-
----
-
-## Command Line Examples
-
-The package includes example scripts:
-
-```bash
-# Record system audio to WAV
-node examples/record-wav.mjs -o output.wav -d 10 -s 16000 -m
-
-# Record microphone to WAV
-node examples/record-mic.mjs -o mic.wav -d 5 -g 0.8
-
-# List audio devices
-node examples/record-mic.mjs -l
-
-# Test device listing
-node examples/test-devices.mjs
-```
-
 ---
 
 ## Troubleshooting
 
-### "System audio recording permission not configured"
+### macOS: "System audio recording permission not configured"
 
-1. Run `openSystemSettings()` or open **System Settings > Privacy & Security > Screen & System Audio Recording**
-2. Scroll down to the **"System Audio Recording Only"** section (not the top section)
-3. Add and enable your terminal app (Terminal, iTerm2, VS Code, etc.)
-4. Restart the terminal app after granting permission
+1. Open **System Settings > Privacy & Security > Screen & System Audio Recording**
+2. Scroll to **"System Audio Recording Only"** section
+3. Add and enable your terminal app
+4. Restart the terminal app
 
-### "Microphone permission denied"
+### macOS: "Microphone permission denied"
 
 1. Open **System Settings > Privacy & Security > Microphone**
 2. Enable access for your terminal app
 3. Restart the app if needed
 
-### "No default input device"
+### Windows: No audio captured
 
-- Check that a microphone is connected
-- Verify in **System Settings > Sound > Input** that a device is selected
+1. Ensure Windows 10 version 2004 or later
+2. Check **Settings > Privacy > Microphone** for mic access
+3. For system audio, no permissions are needed
 
 ### Build Errors
 
-Ensure you have Xcode Command Line Tools:
-
+**macOS:**
 ```bash
 xcode-select --install
-```
-
-Rebuild the native addon:
-
-```bash
 npm run rebuild
 ```
 
-### Apple Silicon / Intel Compatibility
-
-The library builds a universal binary supporting both architectures. If you encounter issues:
-
-```bash
-npm run clean
-npm run build:native
-```
+**Windows:**
+- Install Visual Studio Build Tools with "C++ build tools" workload
+- Ensure Windows SDK 10.0.19041.0+ is installed
 
 ---
 
@@ -533,27 +407,18 @@ BaseAudioRecorder (EventEmitter, 10ms polling)
      |
 Native NAPI Wrapper (C++)
      |
-Swift Bridge (C-compatible API)
-     |
 +--------------------+--------------------+
-|  AudioTapManager   |  MicrophoneRecorder|
-|  (System Audio)    |  (AVCaptureSession)|
+|      macOS         |      Windows       |
+|   (Swift Bridge)   |    (WASAPI C++)    |
 +--------------------+--------------------+
      |                        |
-macOS Core Audio / AVFoundation Frameworks
++--------------------+--------------------+
+|  AudioTapManager   |  WasapiCapture     |
+|  MicrophoneCapture |  (Loopback/Mic)    |
++--------------------+--------------------+
+     |                        |
+Core Audio / AVFoundation    WASAPI
 ```
-
-### Native Layer Components
-
-| Component | Purpose |
-|-----------|---------|
-| `CoreAudioBridge.swift` | C-compatible entry points for NAPI |
-| `AudioTapManager.swift` | System audio tapping via `AudioHardwareCreateProcessTap` |
-| `MicrophoneCapture.swift` | AVCaptureSession-based microphone recording |
-| `AudioDeviceManager.swift` | Device enumeration (AVCaptureDevice + Core Audio) |
-| `AudioBuffer.swift` | Ring buffer for audio chunk management |
-| `AudioFormatConverter.swift` | Sample rate conversion via AVAudioConverter |
-| `AudioPermission.swift` | TCC and AVFoundation permission handling |
 
 ---
 
@@ -561,8 +426,8 @@ macOS Core Audio / AVFoundation Frameworks
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/coreaudio-node.git
-cd coreaudio-node
+git clone https://github.com/your-username/native-audio-node.git
+cd native-audio-node
 
 # Install dependencies
 npm install
@@ -585,28 +450,6 @@ npm run clean
 # Rebuild native addon
 npm run rebuild
 ```
-
----
-
-## API Stability
-
-During the `0.x.x` release cycle, the API is unstable and subject to change without notice.
-
----
-
-## Code Signing
-
-The native addon is built locally on your machine. For distribution:
-
-### For Electron Applications
-
-When bundled inside an Electron app, the native addon **inherits the code signature** from the parent application. Ensure your app's entitlements include audio recording permissions.
-
-### For Standalone Usage
-
-If running directly via Node.js:
-- **Development**: Works without additional signing
-- **Production**: Consider signing with your Developer ID if distributing
 
 ---
 

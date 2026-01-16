@@ -18,9 +18,9 @@ let AudioRecorderNative: AudioRecorderNativeConstructor
 function loadNativeAddon(): AudioRecorderNativeConstructor {
   const paths = [
     // Development: build/Release relative to dist/
-    path.join(__dirname, '..', 'build', 'Release', 'coreaudio.node'),
+    path.join(__dirname, '..', 'build', 'Release', 'native_audio.node'),
     // Installed package: build/Release at package root
-    path.join(__dirname, '..', '..', 'build', 'Release', 'coreaudio.node'),
+    path.join(__dirname, '..', '..', 'build', 'Release', 'native_audio.node'),
   ]
 
   for (const addonPath of paths) {
@@ -33,7 +33,7 @@ function loadNativeAddon(): AudioRecorderNativeConstructor {
   }
 
   throw new Error(
-    `Failed to load native coreaudio addon. Make sure you've built the native module with 'npm run build:native'.`
+    `Failed to load native audio addon. Make sure you've built the native module with 'npm run build:native'.`
   )
 }
 
@@ -52,8 +52,11 @@ export abstract class BaseAudioRecorder {
 
   constructor() {
     // Check platform at construction time
-    if (process.platform !== 'darwin') {
-      throw new Error(`coreaudio-node only supports macOS (darwin). Current platform: ${process.platform}`)
+    const supportedPlatforms = ['darwin', 'win32']
+    if (!supportedPlatforms.includes(process.platform)) {
+      throw new Error(
+        `native-audio-node only supports macOS and Windows. Current platform: ${process.platform}`
+      )
     }
 
     this.native = new AudioRecorderNative()

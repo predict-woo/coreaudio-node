@@ -1,7 +1,7 @@
 {
-  "name": "coreaudio-node",
-  "version": "0.1.1",
-  "description": "Native macOS audio capture for Node.js - system audio and microphone recording",
+  "name": "native-audio-node",
+  "version": "0.2.0",
+  "description": "Native audio capture for Node.js - system audio and microphone recording (macOS & Windows)",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -14,9 +14,12 @@
   "keywords": [
     "audio",
     "macos",
+    "windows",
     "coreaudio",
+    "wasapi",
     "microphone",
     "system-audio",
+    "loopback",
     "recording",
     "capture",
     "native",
@@ -49,7 +52,8 @@
     "node": ">=20"
   },
   "os": [
-    "darwin"
+    "darwin",
+    "win32"
   ],
   "cpu": [
     "x64",

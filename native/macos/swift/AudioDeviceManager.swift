@@ -357,12 +357,22 @@ class AudioDeviceManager {
 
 // MARK: - C-Compatible API
 
-// Using raw pointers to match C struct layout
-// C struct: { char* uid, char* name, char* manufacturer, bool isDefault, bool isInput, bool isOutput, double sampleRate, uint32_t channelCount }
+// C struct matching audio_bridge.h AudioDeviceInfo
+@frozen
+public struct CAudioDeviceInfo {
+    var uid: UnsafeMutablePointer<CChar>?
+    var name: UnsafeMutablePointer<CChar>?
+    var manufacturer: UnsafeMutablePointer<CChar>?
+    var isDefault: Bool
+    var isInput: Bool
+    var isOutput: Bool
+    var sampleRate: Double
+    var channelCount: UInt32
+}
 
-@_cdecl("coreaudio_list_devices")
-public func coreaudio_list_devices(
-    devices: UnsafeMutablePointer<UnsafeMutableRawPointer?>,
+@_cdecl("audio_list_devices")
+public func audio_list_devices(
+    devices: UnsafeMutablePointer<UnsafeMutablePointer<CAudioDeviceInfo>?>,
     count: UnsafeMutablePointer<Int32>
 ) -> Int32 {
     let deviceList = AudioDeviceManager.listAllDevices()
@@ -373,26 +383,20 @@ public func coreaudio_list_devices(
         return 0
     }
 
-    // Calculate struct size: 3 pointers (24 bytes on 64-bit) + 3 bools (3 bytes + padding) + double (8 bytes) + uint32 (4 bytes)
-    // Using 8-byte alignment: 24 + 8 (3 bools padded) + 8 + 8 (uint32 padded) = 48 bytes
-    let structSize = 48
-    let arrayPointer = UnsafeMutableRawPointer.allocate(byteCount: structSize * deviceList.count, alignment: 8)
+    // Allocate array of CAudioDeviceInfo structs
+    let arrayPointer = UnsafeMutablePointer<CAudioDeviceInfo>.allocate(capacity: deviceList.count)
 
     for (index, device) in deviceList.enumerated() {
-        let offset = index * structSize
-        let uidCStr = strdup(device.uid)
-        let nameCStr = strdup(device.name)
-        let manufacturerCStr = strdup(device.manufacturer)
-
-        // Write fields at their offsets
-        arrayPointer.storeBytes(of: uidCStr, toByteOffset: offset + 0, as: UnsafeMutablePointer<CChar>?.self)
-        arrayPointer.storeBytes(of: nameCStr, toByteOffset: offset + 8, as: UnsafeMutablePointer<CChar>?.self)
-        arrayPointer.storeBytes(of: manufacturerCStr, toByteOffset: offset + 16, as: UnsafeMutablePointer<CChar>?.self)
-        arrayPointer.storeBytes(of: device.isDefault, toByteOffset: offset + 24, as: Bool.self)
-        arrayPointer.storeBytes(of: device.isInput, toByteOffset: offset + 25, as: Bool.self)
-        arrayPointer.storeBytes(of: device.isOutput, toByteOffset: offset + 26, as: Bool.self)
-        arrayPointer.storeBytes(of: device.sampleRate, toByteOffset: offset + 32, as: Double.self)
-        arrayPointer.storeBytes(of: device.channelCount, toByteOffset: offset + 40, as: UInt32.self)
+        arrayPointer[index] = CAudioDeviceInfo(
+            uid: strdup(device.uid),
+            name: strdup(device.name),
+            manufacturer: strdup(device.manufacturer),
+            isDefault: device.isDefault,
+            isInput: device.isInput,
+            isOutput: device.isOutput,
+            sampleRate: device.sampleRate,
+            channelCount: device.channelCount
+        )
     }
 
     devices.pointee = arrayPointer
@@ -401,23 +405,21 @@ public func coreaudio_list_devices(
     return 0
 }
 
-@_cdecl("coreaudio_free_device_list")
-public func coreaudio_free_device_list(
-    devices: UnsafeMutableRawPointer?,
+@_cdecl("audio_free_device_list")
+public func audio_free_device_list(
+    devices: UnsafeMutablePointer<CAudioDeviceInfo>?,
     count: Int32
 ) {
     guard let devices = devices else { return }
 
-    let structSize = 48
     for i in 0..<Int(count) {
-        let offset = i * structSize
-        if let uid = devices.load(fromByteOffset: offset + 0, as: UnsafeMutablePointer<CChar>?.self) {
+        if let uid = devices[i].uid {
             free(uid)
         }
-        if let name = devices.load(fromByteOffset: offset + 8, as: UnsafeMutablePointer<CChar>?.self) {
+        if let name = devices[i].name {
             free(name)
         }
-        if let manufacturer = devices.load(fromByteOffset: offset + 16, as: UnsafeMutablePointer<CChar>?.self) {
+        if let manufacturer = devices[i].manufacturer {
             free(manufacturer)
         }
     }
@@ -425,16 +427,16 @@ public func coreaudio_free_device_list(
     devices.deallocate()
 }
 
-@_cdecl("coreaudio_get_default_input_device")
-public func coreaudio_get_default_input_device() -> UnsafeMutablePointer<CChar>? {
+@_cdecl("audio_get_default_input_device")
+public func audio_get_default_input_device() -> UnsafeMutablePointer<CChar>? {
     guard let uid = AudioDeviceManager.getDefaultInputDeviceUID() else {
         return nil
     }
     return strdup(uid)
 }
 
-@_cdecl("coreaudio_get_default_output_device")
-public func coreaudio_get_default_output_device() -> UnsafeMutablePointer<CChar>? {
+@_cdecl("audio_get_default_output_device")
+public func audio_get_default_output_device() -> UnsafeMutablePointer<CChar>? {
     guard let uid = AudioDeviceManager.getDefaultOutputDeviceUID() else {
         return nil
     }
