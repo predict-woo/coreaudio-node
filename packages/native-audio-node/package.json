@@ -1,6 +1,6 @@
 {
   "name": "native-audio-node",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Native audio capture for Node.js - system audio and microphone recording (macOS & Windows)",
   "type": "module",
   "main": "dist/index.js",
