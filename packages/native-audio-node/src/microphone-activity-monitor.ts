@@ -7,6 +7,7 @@ import type {
   MicActivityMonitorNativeClass,
   MicActivityNativeEvent,
   AudioDevice,
+  AudioProcess,
 } from './types.js'
 
 const DEFAULT_POLL_INTERVAL = 100
@@ -135,6 +136,29 @@ export class MicrophoneActivityMonitor {
   }
 
   /**
+   * Get list of processes currently using the microphone.
+   *
+   * **macOS:** Uses Core Audio's kAudioHardwarePropertyProcessObjectList API
+   * to identify which applications are actively using microphone input.
+   * No special permissions required beyond microphone access.
+   *
+   * **Windows:** Returns an empty array (not yet implemented).
+   *
+   * @returns Array of processes currently using the microphone
+   *
+   * @example
+   * ```typescript
+   * const processes = monitor.getActiveProcesses()
+   * for (const proc of processes) {
+   *   console.log(`${proc.name} (PID: ${proc.pid}) is using the mic`)
+   * }
+   * ```
+   */
+  getActiveProcesses(): AudioProcess[] {
+    return this.native.getActiveProcesses()
+  }
+
+  /**
    * Check if the monitor is currently running.
    */
   isRunning(): boolean {
@@ -178,7 +202,8 @@ export class MicrophoneActivityMonitor {
     switch (event.type) {
       case 0: // change
         if (event.isActive !== undefined) {
-          this.events.emit('change', event.isActive)
+          const processes = this.native.getActiveProcesses()
+          this.events.emit('change', event.isActive, processes)
         }
         break
 

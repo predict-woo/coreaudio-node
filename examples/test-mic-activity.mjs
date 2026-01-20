@@ -49,10 +49,17 @@ console.log('')
 
 const monitor = new MicrophoneActivityMonitor({ scope })
 
-monitor.on('change', (isActive) => {
+monitor.on('change', (isActive, processes) => {
   const timestamp = new Date().toISOString()
   if (isActive) {
     console.log(`[${timestamp}] 🎤 MICROPHONE IN USE`)
+    if (processes && processes.length > 0) {
+      console.log(`    Processes using mic:`)
+      for (const proc of processes) {
+        const bundleInfo = proc.bundleId ? ` (${proc.bundleId})` : ''
+        console.log(`      - ${proc.name} [PID: ${proc.pid}]${bundleInfo}`)
+      }
+    }
   } else {
     console.log(`[${timestamp}] 🔇 Microphone idle`)
   }
@@ -82,6 +89,15 @@ if (activeDevices.length > 0) {
   console.log('Currently active devices:')
   for (const device of activeDevices) {
     console.log(`  - ${device.name}`)
+  }
+}
+
+const activeProcesses = monitor.getActiveProcesses()
+if (activeProcesses.length > 0) {
+  console.log('Processes currently using mic:')
+  for (const proc of activeProcesses) {
+    const bundleInfo = proc.bundleId ? ` (${proc.bundleId})` : ''
+    console.log(`  - ${proc.name} [PID: ${proc.pid}]${bundleInfo}`)
   }
 }
 console.log('')

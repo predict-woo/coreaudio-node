@@ -162,6 +162,18 @@ int32_t mic_activity_get_active_device_ids(
 
 void mic_activity_free_device_ids(char** deviceIds, int32_t count);
 
+// Get list of processes currently using microphone input
+// Returns parallel arrays: pids, names, bundleIds (caller must free with mic_activity_free_processes)
+int32_t mic_activity_get_active_processes(
+    MicActivityMonitorHandle handle,
+    int32_t** pids,
+    char*** names,
+    char*** bundleIds,
+    int32_t* count
+);
+
+void mic_activity_free_processes(int32_t* pids, char** names, char** bundleIds, int32_t count);
+
 #ifdef __cplusplus
 }
 #endif

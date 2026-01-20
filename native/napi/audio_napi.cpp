@@ -381,6 +381,7 @@ private:
     Napi::Value Stop(const Napi::CallbackInfo& info);
     Napi::Value IsActive(const Napi::CallbackInfo& info);
     Napi::Value GetActiveDeviceIds(const Napi::CallbackInfo& info);
+    Napi::Value GetActiveProcesses(const Napi::CallbackInfo& info);
     Napi::Value ProcessEvents(const Napi::CallbackInfo& info);
 
     static void OnChange(bool isActive, void* context);
@@ -406,6 +407,7 @@ Napi::Object MicActivityMonitorWrapper::Init(Napi::Env env, Napi::Object exports
         InstanceMethod("stop", &MicActivityMonitorWrapper::Stop),
         InstanceMethod("isActive", &MicActivityMonitorWrapper::IsActive),
         InstanceMethod("getActiveDeviceIds", &MicActivityMonitorWrapper::GetActiveDeviceIds),
+        InstanceMethod("getActiveProcesses", &MicActivityMonitorWrapper::GetActiveProcesses),
         InstanceMethod("processEvents", &MicActivityMonitorWrapper::ProcessEvents),
     });
 
@@ -490,6 +492,32 @@ Napi::Value MicActivityMonitorWrapper::GetActiveDeviceIds(const Napi::CallbackIn
     }
 
     mic_activity_free_device_ids(deviceIds, count);
+    return arr;
+}
+
+Napi::Value MicActivityMonitorWrapper::GetActiveProcesses(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+
+    int32_t* pids = nullptr;
+    char** names = nullptr;
+    char** bundleIds = nullptr;
+    int32_t count = 0;
+
+    int32_t result = mic_activity_get_active_processes(handle_, &pids, &names, &bundleIds, &count);
+    if (result != 0 || count == 0) {
+        return Napi::Array::New(env, 0);
+    }
+
+    Napi::Array arr = Napi::Array::New(env, count);
+    for (int32_t i = 0; i < count; i++) {
+        Napi::Object obj = Napi::Object::New(env);
+        obj.Set("pid", Napi::Number::New(env, pids[i]));
+        obj.Set("name", Napi::String::New(env, names[i] ? names[i] : ""));
+        obj.Set("bundleId", Napi::String::New(env, bundleIds[i] ? bundleIds[i] : ""));
+        arr.Set(i, obj);
+    }
+
+    mic_activity_free_processes(pids, names, bundleIds, count);
     return arr;
 }
 

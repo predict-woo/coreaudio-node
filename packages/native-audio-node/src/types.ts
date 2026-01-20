@@ -92,6 +92,15 @@ export interface NativeEvent {
 // ============================================================================
 
 /**
+ * Information about a process using audio.
+ */
+export interface AudioProcess {
+  pid: number
+  name: string
+  bundleId: string
+}
+
+/**
  * Options for MicrophoneActivityMonitor.
  */
 export interface MicrophoneActivityMonitorOptions {
@@ -119,8 +128,9 @@ export interface MicrophoneActivityMonitorEvents {
   /**
    * Emitted when the aggregate microphone activity state changes.
    * `isActive` is true if ANY monitored microphone is currently in use.
+   * `processes` contains the list of processes currently using the microphone.
    */
-  change: (isActive: boolean) => void
+  change: (isActive: boolean, processes: AudioProcess[]) => void
 
   /**
    * Emitted when a specific device's activity state changes.
@@ -144,6 +154,7 @@ export interface MicActivityNativeEvent {
   deviceId?: string
   deviceName?: string
   message?: string
+  processes?: Array<{ pid: number; name: string; bundleId: string }>
 }
 
 /**
@@ -155,6 +166,7 @@ export interface MicActivityMonitorNativeClass {
   stop(): void
   isActive(): boolean
   getActiveDeviceIds(): string[]
+  getActiveProcesses(): Array<{ pid: number; name: string; bundleId: string }>
   processEvents(): MicActivityNativeEvent[]
 }
 

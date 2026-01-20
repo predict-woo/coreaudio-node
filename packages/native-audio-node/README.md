@@ -8,6 +8,7 @@ A TypeScript-first library that provides low-latency access to native audio APIs
 
 - **System Audio Capture** - Record all audio playing on your system, or filter by specific processes
 - **Microphone Recording** - Capture from any audio input device with gain control
+- **Microphone Activity Monitoring** - Detect when any app uses the microphone, with process identification
 - **Cross-Platform** - Native support for macOS (Core Audio) and Windows (WASAPI)
 - **Low Latency** - 10ms event polling for real-time audio processing
 - **Sample Rate Conversion** - Built-in resampling to common rates (8kHz-48kHz)
@@ -22,6 +23,8 @@ A TypeScript-first library that provides low-latency access to native audio APIs
 |---------|-------|---------|
 | System audio capture | ✅ | ✅ |
 | Microphone capture | ✅ | ✅ |
+| Microphone activity monitoring | ✅ | ✅ |
+| Identify processes using mic | ✅ | ❌ |
 | Process filtering (include) | ✅ Multiple PIDs | ✅ Single PID* |
 | Process filtering (exclude) | ✅ Multiple PIDs | ✅ Single PID* |
 | Mute captured processes | ✅ | ❌ |
@@ -163,6 +166,85 @@ const recorder = new MicrophoneRecorder(options?: MicrophoneRecorderOptions)
 
 ---
 
+#### `MicrophoneActivityMonitor`
+
+Monitors microphone usage by any application on the system. Detects when apps start/stop using the microphone and identifies which processes are recording.
+
+```typescript
+import { MicrophoneActivityMonitor } from 'native-audio-node'
+
+const monitor = new MicrophoneActivityMonitor(options?: MicrophoneActivityMonitorOptions)
+```
+
+**Options:**
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `scope` | `'all' \| 'default'` | `'all'` | Monitor all input devices or only the default |
+| `fallbackPollInterval` | `number` | `2000` | Polling interval in ms when native events unavailable |
+
+**Methods:**
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `start()` | `void` | Start monitoring microphone activity |
+| `stop()` | `void` | Stop monitoring and release resources |
+| `isActive()` | `boolean` | Check if any microphone is currently in use |
+| `isRunning()` | `boolean` | Check if the monitor is currently running |
+| `getActiveDevices()` | `AudioDevice[]` | Get list of devices currently being used |
+| `getActiveProcesses()` | `AudioProcess[]` | Get list of processes using the microphone (**macOS only**) |
+
+**Events:**
+
+```typescript
+interface MicrophoneActivityMonitorEvents {
+  change: (isActive: boolean, processes: AudioProcess[]) => void
+  deviceChange: (device: AudioDevice, isActive: boolean) => void
+  error: (error: Error) => void
+}
+```
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `change` | `isActive`, `processes` | Aggregate mic activity changed; includes processes on macOS |
+| `deviceChange` | `device`, `isActive` | Specific device activity changed |
+| `error` | `Error` | An error occurred during monitoring |
+
+**Example:**
+
+```typescript
+import { MicrophoneActivityMonitor } from 'native-audio-node'
+
+const monitor = new MicrophoneActivityMonitor()
+
+monitor.on('change', (isActive, processes) => {
+  if (isActive) {
+    console.log('Microphone in use!')
+    // On macOS, processes contains apps using the mic
+    for (const proc of processes) {
+      console.log(`  ${proc.name} (PID: ${proc.pid})`)
+    }
+  } else {
+    console.log('Microphone idle')
+  }
+})
+
+monitor.on('deviceChange', (device, isActive) => {
+  console.log(`${device.name}: ${isActive ? 'active' : 'inactive'}`)
+})
+
+monitor.start()
+
+// Query current state anytime
+console.log('Is mic active?', monitor.isActive())
+console.log('Active processes:', monitor.getActiveProcesses())
+
+// Later...
+monitor.stop()
+```
+
+---
+
 ### Events
 
 Both recorder classes emit the following events:
@@ -221,6 +303,18 @@ interface AudioDevice {
   isOutput: boolean         // Supports output (speakers)
   sampleRate: number        // Native sample rate
   channelCount: number      // Number of channels
+}
+```
+
+#### `AudioProcess`
+
+Information about a process using audio input (**macOS only**).
+
+```typescript
+interface AudioProcess {
+  pid: number       // Process ID
+  name: string      // Process name (e.g., "Zoom", "node")
+  bundleId: string  // macOS bundle identifier (e.g., "us.zoom.xos")
 }
 ```
 
@@ -358,6 +452,41 @@ recorder.on('data', (chunk) => {
 })
 
 await recorder.start()
+```
+
+### Microphone Activity Monitoring
+
+Detect when any application uses the microphone:
+
+```typescript
+import { MicrophoneActivityMonitor } from 'native-audio-node'
+
+const monitor = new MicrophoneActivityMonitor()
+
+monitor.on('change', (isActive, processes) => {
+  if (isActive) {
+    console.log('🎤 Microphone in use!')
+    // macOS: identify which apps are using the mic
+    if (processes.length > 0) {
+      console.log('Apps using mic:')
+      for (const proc of processes) {
+        console.log(`  - ${proc.name} (PID: ${proc.pid})`)
+      }
+    }
+  } else {
+    console.log('🔇 Microphone idle')
+  }
+})
+
+monitor.start()
+
+// Check state programmatically
+setInterval(() => {
+  const processes = monitor.getActiveProcesses()
+  if (processes.length > 0) {
+    console.log('Currently recording:', processes.map(p => p.name).join(', '))
+  }
+}, 5000)
 ```
 
 ---

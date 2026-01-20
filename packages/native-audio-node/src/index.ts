@@ -18,6 +18,7 @@ export type {
   AudioChunk,
   AudioMetadata,
   AudioDevice,
+  AudioProcess,
   AudioRecorderEvents,
 } from './types.js'
 

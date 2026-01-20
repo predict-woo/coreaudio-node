@@ -1,6 +1,8 @@
 import Foundation
 import CoreAudio
 import AVFoundation
+import AppKit
+import Darwin
 
 public typealias MicActivityChangeCallback = @convention(c) (Bool, UnsafeMutableRawPointer?) -> Void
 public typealias MicActivityDeviceCallback = @convention(c) (UnsafePointer<CChar>?, UnsafePointer<CChar>?, Bool, UnsafeMutableRawPointer?) -> Void
@@ -73,6 +75,95 @@ class MicActivityMonitor {
             }
         }
         return activeIds
+    }
+    
+    private func getProcessName(pid: pid_t) -> String? {
+        let maxPathSize = 4096
+        let pathBuffer = UnsafeMutablePointer<CChar>.allocate(capacity: maxPathSize)
+        defer { pathBuffer.deallocate() }
+        
+        let pathLength = proc_pidpath(pid, pathBuffer, UInt32(maxPathSize))
+        if pathLength > 0 {
+            let path = String(cString: pathBuffer)
+            return (path as NSString).lastPathComponent
+        }
+        return nil
+    }
+    
+    func getActiveProcesses() -> [(pid: pid_t, name: String, bundleId: String)] {
+        var result: [(pid: pid_t, name: String, bundleId: String)] = []
+        
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyProcessObjectList,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        
+        var dataSize: UInt32 = 0
+        var status = AudioObjectGetPropertyDataSize(
+            AudioObjectID(kAudioObjectSystemObject),
+            &address,
+            0, nil,
+            &dataSize
+        )
+        
+        guard status == noErr && dataSize > 0 else { return result }
+        
+        let count = Int(dataSize) / MemoryLayout<AudioObjectID>.size
+        var processIDs = [AudioObjectID](repeating: 0, count: count)
+        
+        status = AudioObjectGetPropertyData(
+            AudioObjectID(kAudioObjectSystemObject),
+            &address,
+            0, nil,
+            &dataSize,
+            &processIDs
+        )
+        
+        guard status == noErr else { return result }
+        
+        for procID in processIDs {
+            var inputAddr = AudioObjectPropertyAddress(
+                mSelector: kAudioProcessPropertyIsRunningInput,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain
+            )
+            var isRunningInput: UInt32 = 0
+            var inputSize = UInt32(MemoryLayout<UInt32>.size)
+            let inputStatus = AudioObjectGetPropertyData(procID, &inputAddr, 0, nil, &inputSize, &isRunningInput)
+            
+            guard inputStatus == noErr && isRunningInput != 0 else { continue }
+            
+            var pidAddr = AudioObjectPropertyAddress(
+                mSelector: kAudioProcessPropertyPID,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain
+            )
+            var pid: pid_t = -1
+            var pidSize = UInt32(MemoryLayout<pid_t>.size)
+            AudioObjectGetPropertyData(procID, &pidAddr, 0, nil, &pidSize, &pid)
+            
+            var bundleAddr = AudioObjectPropertyAddress(
+                mSelector: kAudioProcessPropertyBundleID,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain
+            )
+            var bundleRef: Unmanaged<CFString>?
+            var bundleSize = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+            AudioObjectGetPropertyData(procID, &bundleAddr, 0, nil, &bundleSize, &bundleRef)
+            let bundleId = (bundleRef?.takeUnretainedValue() as String?) ?? ""
+            
+            let app = NSRunningApplication(processIdentifier: pid)
+            var name = app?.localizedName
+            
+            if name == nil {
+                name = getProcessName(pid: pid)
+            }
+            
+            result.append((pid: pid, name: name ?? "PID \(pid)", bundleId: bundleId))
+        }
+        
+        return result
     }
     
     private func setupAllInputDeviceListeners() {
@@ -523,4 +614,90 @@ public func mic_activity_free_device_ids(
     }
     
     deviceIds.deallocate()
+}
+
+@_cdecl("mic_activity_get_active_processes")
+public func mic_activity_get_active_processes(
+    handle: UnsafeMutableRawPointer?,
+    pids: UnsafeMutablePointer<UnsafeMutablePointer<Int32>?>?,
+    names: UnsafeMutablePointer<UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?>?,
+    bundleIds: UnsafeMutablePointer<UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?>?,
+    count: UnsafeMutablePointer<Int32>?
+) -> Int32 {
+    guard let handle = handle,
+          let pids = pids,
+          let names = names,
+          let bundleIds = bundleIds,
+          let count = count else {
+        return -1
+    }
+    
+    monitorsLock.lock()
+    let monitor = monitors[handle]
+    monitorsLock.unlock()
+    
+    guard let monitor = monitor else {
+        pids.pointee = nil
+        names.pointee = nil
+        bundleIds.pointee = nil
+        count.pointee = 0
+        return -1
+    }
+    
+    let activeProcesses = monitor.getActiveProcesses()
+    
+    if activeProcesses.isEmpty {
+        pids.pointee = nil
+        names.pointee = nil
+        bundleIds.pointee = nil
+        count.pointee = 0
+        return 0
+    }
+    
+    let pidsPtr = UnsafeMutablePointer<Int32>.allocate(capacity: activeProcesses.count)
+    let namesPtr = UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>.allocate(capacity: activeProcesses.count)
+    let bundleIdsPtr = UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>.allocate(capacity: activeProcesses.count)
+    
+    for (index, proc) in activeProcesses.enumerated() {
+        pidsPtr[index] = proc.pid
+        namesPtr[index] = strdup(proc.name)
+        bundleIdsPtr[index] = strdup(proc.bundleId)
+    }
+    
+    pids.pointee = pidsPtr
+    names.pointee = namesPtr
+    bundleIds.pointee = bundleIdsPtr
+    count.pointee = Int32(activeProcesses.count)
+    
+    return 0
+}
+
+@_cdecl("mic_activity_free_processes")
+public func mic_activity_free_processes(
+    pids: UnsafeMutablePointer<Int32>?,
+    names: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?,
+    bundleIds: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?,
+    count: Int32
+) {
+    if let pids = pids {
+        pids.deallocate()
+    }
+    
+    if let names = names {
+        for i in 0..<Int(count) {
+            if let ptr = names[i] {
+                free(ptr)
+            }
+        }
+        names.deallocate()
+    }
+    
+    if let bundleIds = bundleIds {
+        for i in 0..<Int(count) {
+            if let ptr = bundleIds[i] {
+                free(ptr)
+            }
+        }
+        bundleIds.deallocate()
+    }
 }
