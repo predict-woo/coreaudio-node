@@ -12,6 +12,9 @@
   "files": [
     "native_audio.node"
   ],
+  "scripts": {
+    "prepublishOnly": "node -e \"require('fs').accessSync('native_audio.node')\" || (echo 'ERROR: native_audio.node not found! Build the native module first.' && exit 1)"
+  },
   "os": [
     "win32"
   ],
