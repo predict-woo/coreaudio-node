@@ -1,6 +1,6 @@
 {
   "name": "@native-audio-node/darwin-arm64",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Native audio capture binary for macOS Apple Silicon (arm64)",
   "license": "MIT",
   "author": "",
