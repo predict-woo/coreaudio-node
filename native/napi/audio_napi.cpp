@@ -357,6 +357,224 @@ std::vector<AudioEvent> AudioRecorderWrapper::DrainEvents() {
 }
 
 // ============================================================================
+// Microphone Activity Monitor
+// ============================================================================
+
+struct MicActivityEvent {
+    int32_t type;
+    bool isActive;
+    std::string deviceId;
+    std::string deviceName;
+    std::string message;
+};
+
+class MicActivityMonitorWrapper : public Napi::ObjectWrap<MicActivityMonitorWrapper> {
+public:
+    static Napi::Object Init(Napi::Env env, Napi::Object exports);
+    MicActivityMonitorWrapper(const Napi::CallbackInfo& info);
+    ~MicActivityMonitorWrapper();
+
+private:
+    static Napi::FunctionReference constructor;
+
+    Napi::Value Start(const Napi::CallbackInfo& info);
+    Napi::Value Stop(const Napi::CallbackInfo& info);
+    Napi::Value IsActive(const Napi::CallbackInfo& info);
+    Napi::Value GetActiveDeviceIds(const Napi::CallbackInfo& info);
+    Napi::Value ProcessEvents(const Napi::CallbackInfo& info);
+
+    static void OnChange(bool isActive, void* context);
+    static void OnDeviceChange(const char* deviceId, const char* deviceName, bool isActive, void* context);
+    static void OnError(const char* message, void* context);
+
+    void QueueEvent(MicActivityEvent event);
+    std::vector<MicActivityEvent> DrainEvents();
+
+    MicActivityMonitorHandle handle_;
+    std::mutex eventMutex_;
+    std::queue<MicActivityEvent> eventQueue_;
+    std::atomic<bool> isDestroyed_{false};
+};
+
+Napi::FunctionReference MicActivityMonitorWrapper::constructor;
+
+Napi::Object MicActivityMonitorWrapper::Init(Napi::Env env, Napi::Object exports) {
+    Napi::HandleScope scope(env);
+
+    Napi::Function func = DefineClass(env, "MicActivityMonitorNative", {
+        InstanceMethod("start", &MicActivityMonitorWrapper::Start),
+        InstanceMethod("stop", &MicActivityMonitorWrapper::Stop),
+        InstanceMethod("isActive", &MicActivityMonitorWrapper::IsActive),
+        InstanceMethod("getActiveDeviceIds", &MicActivityMonitorWrapper::GetActiveDeviceIds),
+        InstanceMethod("processEvents", &MicActivityMonitorWrapper::ProcessEvents),
+    });
+
+    constructor = Napi::Persistent(func);
+    constructor.SuppressDestruct();
+
+    exports.Set("MicActivityMonitorNative", func);
+    return exports;
+}
+
+MicActivityMonitorWrapper::MicActivityMonitorWrapper(const Napi::CallbackInfo& info)
+    : Napi::ObjectWrap<MicActivityMonitorWrapper>(info) {
+    Napi::Env env = info.Env();
+
+    handle_ = mic_activity_create(
+        &MicActivityMonitorWrapper::OnChange,
+        &MicActivityMonitorWrapper::OnDeviceChange,
+        &MicActivityMonitorWrapper::OnError,
+        this
+    );
+
+    if (!handle_) {
+        Napi::Error::New(env, "Failed to create MicActivityMonitor").ThrowAsJavaScriptException();
+    }
+}
+
+MicActivityMonitorWrapper::~MicActivityMonitorWrapper() {
+    isDestroyed_ = true;
+    if (handle_) {
+        mic_activity_destroy(handle_);
+        handle_ = nullptr;
+    }
+}
+
+Napi::Value MicActivityMonitorWrapper::Start(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+
+    std::string scope = "all";
+    if (info.Length() > 0 && info[0].IsString()) {
+        scope = info[0].As<Napi::String>().Utf8Value();
+    }
+
+    int32_t result = mic_activity_start(handle_, scope.c_str());
+    if (result != 0) {
+        Napi::Error::New(env, "Failed to start mic activity monitor").ThrowAsJavaScriptException();
+    }
+
+    return env.Undefined();
+}
+
+Napi::Value MicActivityMonitorWrapper::Stop(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+
+    int32_t result = mic_activity_stop(handle_);
+    if (result != 0) {
+        Napi::Error::New(env, "Failed to stop mic activity monitor").ThrowAsJavaScriptException();
+    }
+
+    return env.Undefined();
+}
+
+Napi::Value MicActivityMonitorWrapper::IsActive(const Napi::CallbackInfo& info) {
+    return Napi::Boolean::New(info.Env(), mic_activity_is_active(handle_));
+}
+
+Napi::Value MicActivityMonitorWrapper::GetActiveDeviceIds(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+
+    char** deviceIds = nullptr;
+    int32_t count = 0;
+
+    int32_t result = mic_activity_get_active_device_ids(handle_, &deviceIds, &count);
+    if (result != 0 || deviceIds == nullptr || count == 0) {
+        return Napi::Array::New(env, 0);
+    }
+
+    Napi::Array arr = Napi::Array::New(env, count);
+    for (int32_t i = 0; i < count; i++) {
+        if (deviceIds[i]) {
+            arr.Set(i, Napi::String::New(env, deviceIds[i]));
+        }
+    }
+
+    mic_activity_free_device_ids(deviceIds, count);
+    return arr;
+}
+
+Napi::Value MicActivityMonitorWrapper::ProcessEvents(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+
+    std::vector<MicActivityEvent> events = DrainEvents();
+    Napi::Array result = Napi::Array::New(env, events.size());
+
+    for (size_t i = 0; i < events.size(); i++) {
+        const MicActivityEvent& event = events[i];
+        Napi::Object obj = Napi::Object::New(env);
+
+        obj.Set("type", Napi::Number::New(env, event.type));
+
+        switch (event.type) {
+            case 0:
+                obj.Set("isActive", Napi::Boolean::New(env, event.isActive));
+                break;
+
+            case 1:
+                obj.Set("deviceId", Napi::String::New(env, event.deviceId));
+                obj.Set("deviceName", Napi::String::New(env, event.deviceName));
+                obj.Set("isActive", Napi::Boolean::New(env, event.isActive));
+                break;
+
+            case 2:
+                obj.Set("message", Napi::String::New(env, event.message));
+                break;
+        }
+
+        result.Set(i, obj);
+    }
+
+    return result;
+}
+
+void MicActivityMonitorWrapper::OnChange(bool isActive, void* context) {
+    MicActivityMonitorWrapper* self = static_cast<MicActivityMonitorWrapper*>(context);
+    if (self->isDestroyed_) return;
+
+    MicActivityEvent event;
+    event.type = 0;
+    event.isActive = isActive;
+    self->QueueEvent(std::move(event));
+}
+
+void MicActivityMonitorWrapper::OnDeviceChange(const char* deviceId, const char* deviceName, bool isActive, void* context) {
+    MicActivityMonitorWrapper* self = static_cast<MicActivityMonitorWrapper*>(context);
+    if (self->isDestroyed_) return;
+
+    MicActivityEvent event;
+    event.type = 1;
+    event.deviceId = deviceId ? deviceId : "";
+    event.deviceName = deviceName ? deviceName : "";
+    event.isActive = isActive;
+    self->QueueEvent(std::move(event));
+}
+
+void MicActivityMonitorWrapper::OnError(const char* message, void* context) {
+    MicActivityMonitorWrapper* self = static_cast<MicActivityMonitorWrapper*>(context);
+    if (self->isDestroyed_) return;
+
+    MicActivityEvent event;
+    event.type = 2;
+    event.message = message ? message : "Unknown error";
+    self->QueueEvent(std::move(event));
+}
+
+void MicActivityMonitorWrapper::QueueEvent(MicActivityEvent event) {
+    std::lock_guard<std::mutex> lock(eventMutex_);
+    eventQueue_.push(std::move(event));
+}
+
+std::vector<MicActivityEvent> MicActivityMonitorWrapper::DrainEvents() {
+    std::lock_guard<std::mutex> lock(eventMutex_);
+    std::vector<MicActivityEvent> events;
+    while (!eventQueue_.empty()) {
+        events.push_back(std::move(eventQueue_.front()));
+        eventQueue_.pop();
+    }
+    return events;
+}
+
+// ============================================================================
 // Device Enumeration
 // ============================================================================
 
@@ -544,6 +762,7 @@ Napi::Value RequestMicPermission(const Napi::CallbackInfo& info) {
 
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
     AudioRecorderWrapper::Init(env, exports);
+    MicActivityMonitorWrapper::Init(env, exports);
 
     // Device enumeration
     exports.Set("listDevices", Napi::Function::New(env, ListDevices));

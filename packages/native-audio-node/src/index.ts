@@ -2,6 +2,9 @@
 export { SystemAudioRecorder } from './system-audio-recorder.js'
 export { MicrophoneRecorder } from './microphone-recorder.js'
 
+// Microphone activity monitoring
+export { MicrophoneActivityMonitor } from './microphone-activity-monitor.js'
+
 // Device enumeration
 export { listAudioDevices, getDefaultInputDevice, getDefaultOutputDevice } from './devices.js'
 
@@ -10,6 +13,8 @@ export type {
   AudioRecorderOptions,
   SystemAudioRecorderOptions,
   MicrophoneRecorderOptions,
+  MicrophoneActivityMonitorOptions,
+  MicrophoneActivityMonitorEvents,
   AudioChunk,
   AudioMetadata,
   AudioDevice,

@@ -48,6 +48,7 @@ if(APPLE)
         ${CMAKE_SOURCE_DIR}/native/macos/swift/AudioPermission.swift
         ${CMAKE_SOURCE_DIR}/native/macos/swift/AudioDeviceManager.swift
         ${CMAKE_SOURCE_DIR}/native/macos/swift/MicrophoneCapture.swift
+        ${CMAKE_SOURCE_DIR}/native/macos/swift/MicActivityMonitor.swift
         ${CMAKE_SOURCE_DIR}/native/macos/swift/Utils.swift
     )
 

@@ -87,6 +87,85 @@ export interface NativeEvent {
   encoding?: string
 }
 
+// ============================================================================
+// Microphone Activity Monitor Types
+// ============================================================================
+
+/**
+ * Options for MicrophoneActivityMonitor.
+ */
+export interface MicrophoneActivityMonitorOptions {
+  /**
+   * Which devices to monitor.
+   * - 'all': Monitor all input devices (default)
+   * - 'default': Only monitor the system default input device
+   * @default 'all'
+   */
+  scope?: 'all' | 'default'
+
+  /**
+   * Polling fallback interval in milliseconds.
+   * Used when native event listeners are unavailable.
+   * Set to 0 to disable fallback polling.
+   * @default 2000
+   */
+  fallbackPollInterval?: number
+}
+
+/**
+ * Events emitted by MicrophoneActivityMonitor.
+ */
+export interface MicrophoneActivityMonitorEvents {
+  /**
+   * Emitted when the aggregate microphone activity state changes.
+   * `isActive` is true if ANY monitored microphone is currently in use.
+   */
+  change: (isActive: boolean) => void
+
+  /**
+   * Emitted when a specific device's activity state changes.
+   * Provides granular per-device tracking.
+   */
+  deviceChange: (device: AudioDevice, isActive: boolean) => void
+
+  /**
+   * Emitted when an error occurs during monitoring.
+   */
+  error: (error: Error) => void
+}
+
+/**
+ * Native event from mic activity monitor.
+ * @internal
+ */
+export interface MicActivityNativeEvent {
+  type: number // 0=change, 1=deviceChange, 2=error
+  isActive?: boolean
+  deviceId?: string
+  deviceName?: string
+  message?: string
+}
+
+/**
+ * Native mic activity monitor class interface.
+ * @internal
+ */
+export interface MicActivityMonitorNativeClass {
+  start(scope: string): void
+  stop(): void
+  isActive(): boolean
+  getActiveDeviceIds(): string[]
+  processEvents(): MicActivityNativeEvent[]
+}
+
+/**
+ * Native mic activity monitor constructor.
+ * @internal
+ */
+export interface MicActivityMonitorNativeConstructor {
+  new (): MicActivityMonitorNativeClass
+}
+
 // Native addon interface (internal)
 export interface AudioRecorderNativeClass {
   startSystemAudio(options: {

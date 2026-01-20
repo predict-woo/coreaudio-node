@@ -126,6 +126,42 @@ int32_t audio_mic_permission_status(void);
 // Request microphone permission (async)
 void audio_mic_permission_request(PermissionCallback callback, void* context);
 
+// ============================================================================
+// Microphone Activity Monitor API
+// ============================================================================
+
+typedef void* MicActivityMonitorHandle;
+
+// Event types: 0=change (aggregate), 1=deviceChange (per-device), 2=error
+typedef void (*MicActivityChangeCallback)(bool isActive, void* context);
+typedef void (*MicActivityDeviceCallback)(const char* deviceId, const char* deviceName, bool isActive, void* context);
+typedef void (*MicActivityErrorCallback)(const char* message, void* context);
+
+MicActivityMonitorHandle mic_activity_create(
+    MicActivityChangeCallback changeCallback,
+    MicActivityDeviceCallback deviceCallback,
+    MicActivityErrorCallback errorCallback,
+    void* userContext
+);
+
+// scope: "all" or "default"
+int32_t mic_activity_start(MicActivityMonitorHandle handle, const char* scope);
+
+int32_t mic_activity_stop(MicActivityMonitorHandle handle);
+
+void mic_activity_destroy(MicActivityMonitorHandle handle);
+
+bool mic_activity_is_active(MicActivityMonitorHandle handle);
+
+// Get list of active device IDs (caller must free with mic_activity_free_device_ids)
+int32_t mic_activity_get_active_device_ids(
+    MicActivityMonitorHandle handle,
+    char*** deviceIds,
+    int32_t* count
+);
+
+void mic_activity_free_device_ids(char** deviceIds, int32_t count);
+
 #ifdef __cplusplus
 }
 #endif

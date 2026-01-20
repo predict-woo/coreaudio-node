@@ -212,4 +212,97 @@ void audio_mic_permission_request(PermissionCallback callback, void* context) {
     AudioPermissions::RequestMicrophone(callback, context);
 }
 
+// ============================================================================
+// Microphone Activity Monitor (stub - full implementation TODO)
+// ============================================================================
+
+struct MicActivityMonitorState {
+    MicActivityChangeCallback changeCallback;
+    MicActivityDeviceCallback deviceCallback;
+    MicActivityErrorCallback errorCallback;
+    void* userContext;
+    bool isRunning;
+};
+
+MicActivityMonitorHandle mic_activity_create(
+    MicActivityChangeCallback changeCallback,
+    MicActivityDeviceCallback deviceCallback,
+    MicActivityErrorCallback errorCallback,
+    void* userContext
+) {
+    EnsureComInitialized();
+    
+    auto* state = new MicActivityMonitorState{
+        changeCallback,
+        deviceCallback,
+        errorCallback,
+        userContext,
+        false
+    };
+    
+    return static_cast<MicActivityMonitorHandle>(state);
+}
+
+int32_t mic_activity_start(MicActivityMonitorHandle handle, const char* scope) {
+    if (!handle) return -1;
+    
+    auto* state = static_cast<MicActivityMonitorState*>(handle);
+    state->isRunning = true;
+    
+    // TODO: Implement WASAPI session monitoring
+    // - Use IAudioSessionManager2::RegisterSessionNotification
+    // - Track capture endpoint sessions
+    // - Emit change events when sessions become active/inactive
+    
+    return 0;
+}
+
+int32_t mic_activity_stop(MicActivityMonitorHandle handle) {
+    if (!handle) return -1;
+    
+    auto* state = static_cast<MicActivityMonitorState*>(handle);
+    state->isRunning = false;
+    
+    return 0;
+}
+
+void mic_activity_destroy(MicActivityMonitorHandle handle) {
+    if (!handle) return;
+    
+    auto* state = static_cast<MicActivityMonitorState*>(handle);
+    state->isRunning = false;
+    delete state;
+}
+
+bool mic_activity_is_active(MicActivityMonitorHandle handle) {
+    if (!handle) return false;
+    
+    // TODO: Query active capture sessions
+    return false;
+}
+
+int32_t mic_activity_get_active_device_ids(
+    MicActivityMonitorHandle handle,
+    char*** deviceIds,
+    int32_t* count
+) {
+    if (!handle || !deviceIds || !count) return -1;
+    
+    // TODO: Return list of devices with active capture sessions
+    *deviceIds = nullptr;
+    *count = 0;
+    
+    return 0;
+}
+
+void mic_activity_free_device_ids(char** deviceIds, int32_t count) {
+    if (!deviceIds) return;
+    
+    for (int32_t i = 0; i < count; i++) {
+        if (deviceIds[i]) free(deviceIds[i]);
+    }
+    
+    free(deviceIds);
+}
+
 }  // extern "C"

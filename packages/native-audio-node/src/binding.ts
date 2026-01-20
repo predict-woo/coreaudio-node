@@ -2,6 +2,7 @@ import { createRequire } from 'module'
 import type {
   AudioDevice,
   AudioRecorderNativeConstructor,
+  MicActivityMonitorNativeConstructor,
 } from './types.js'
 
 const require = createRequire(import.meta.url)
@@ -11,6 +12,9 @@ export type PermissionStatus = 'unknown' | 'denied' | 'authorized'
 export interface NativeAddon {
   // Audio recorder class
   AudioRecorderNative: AudioRecorderNativeConstructor
+
+  // Mic activity monitor class
+  MicActivityMonitorNative: MicActivityMonitorNativeConstructor
 
   // Device management
   listDevices(): AudioDevice[]
@@ -112,4 +116,11 @@ export function loadBinding(): NativeAddon {
  */
 export function getAudioRecorderNative(): AudioRecorderNativeConstructor {
   return loadBinding().AudioRecorderNative
+}
+
+/**
+ * Get the MicActivityMonitorNative constructor from the native addon.
+ */
+export function getMicActivityMonitorNative(): MicActivityMonitorNativeConstructor {
+  return loadBinding().MicActivityMonitorNative
 }
