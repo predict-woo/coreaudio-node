@@ -476,6 +476,13 @@ int32_t WasapiCapture::Stop() {
 }
 
 void WasapiCapture::CaptureThread() {
+    // Initialize COM for this worker thread (required for WASAPI)
+    // Use MTA for worker threads as it's more suitable for background processing
+    HRESULT comHr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    bool comInitializedByUs = (comHr == S_OK);
+    // S_FALSE means already initialized, RPC_E_CHANGED_MODE means different mode
+    // Either way, COM is usable
+    
     // Increase thread priority for audio processing
     DWORD taskIndex = 0;
     HANDLE taskHandle = AvSetMmThreadCharacteristicsW(L"Pro Audio", &taskIndex);
@@ -554,6 +561,11 @@ void WasapiCapture::CaptureThread() {
 
     if (taskHandle) {
         AvRevertMmThreadCharacteristics(taskHandle);
+    }
+    
+    // Uninitialize COM if we initialized it
+    if (comInitializedByUs) {
+        CoUninitialize();
     }
 }
 

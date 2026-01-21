@@ -135,7 +135,7 @@ export class MicrophoneActivityMonitor {
     return devices
   }
 
-/**
+  /**
    * Get list of processes currently using the microphone.
    *
    * **macOS:** Uses Core Audio's kAudioHardwarePropertyProcessObjectList API

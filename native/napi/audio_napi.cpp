@@ -6,6 +6,92 @@
 #include <cstring>
 #include "audio_bridge.h"
 
+// Platform-specific includes
+#ifdef _WIN32
+#include "../windows/mta_thread.h"
+#include <windows.h>
+#include <delayimp.h>
+#include <stdio.h>
+
+// Force the delay load hook to be included (prevent linker optimization)
+#pragma comment(lib, "delayimp.lib")
+#pragma comment(linker, "/include:__pfnDliNotifyHook2")
+
+// Custom delay-load hook for Electron compatibility
+// The cmake-js default hook doesn't properly resolve N-API symbols in Electron.
+// This hook correctly routes all N-API calls to the main Electron process.
+static HMODULE g_node_module = NULL;
+
+static FARPROC WINAPI electronDelayLoadHook(unsigned int event, DelayLoadInfo* info) {
+    if (event == dliStartProcessing) {
+        // Get the main Electron process module handle
+        g_node_module = GetModuleHandleA(NULL);
+        return NULL;
+    }
+    
+    if (event == dliNotePreLoadLibrary) {
+        // Redirect node.exe requests to the Electron process
+        if (_stricmp(info->szDll, "node.exe") == 0 || _stricmp(info->szDll, "NODE.EXE") == 0) {
+            return (FARPROC)g_node_module;
+        }
+        return NULL;
+    }
+    
+    if (event == dliNotePreGetProcAddress) {
+        // Resolve N-API symbols from the Electron process
+        return GetProcAddress(g_node_module, info->dlp.szProcName);
+    }
+    
+    return NULL;
+}
+
+// Delay-load failure hook for error reporting
+static FARPROC WINAPI delayLoadFailureHook(unsigned int dliNotify, DelayLoadInfo* pdli) {
+    if (dliNotify == dliFailLoadLib) {
+        fprintf(stderr, "[native-audio-node] DELAY LOAD FAILURE: Failed to load DLL: %s\n", pdli->szDll);
+        fflush(stderr);
+    } else if (dliNotify == dliFailGetProc) {
+        if (pdli->dlp.fImportByName) {
+            fprintf(stderr, "[native-audio-node] DELAY LOAD FAILURE: Failed to get proc: %s from %s\n", 
+                    pdli->dlp.szProcName, pdli->szDll);
+        } else {
+            fprintf(stderr, "[native-audio-node] DELAY LOAD FAILURE: Failed to get proc ordinal: %d from %s\n", 
+                    pdli->dlp.dwOrdinal, pdli->szDll);
+        }
+        fflush(stderr);
+    }
+    return NULL;
+}
+
+// Override the cmake-js delay load hook with our Electron-compatible version
+decltype(__pfnDliNotifyHook2) __pfnDliNotifyHook2 = electronDelayLoadHook;
+decltype(__pfnDliFailureHook2) __pfnDliFailureHook2 = delayLoadFailureHook;
+
+#endif
+
+// Debug logging - disabled by default, enable by defining NATIVE_AUDIO_DEBUG
+// #define NATIVE_AUDIO_DEBUG
+#ifdef NATIVE_AUDIO_DEBUG
+#ifdef _WIN32
+static void DebugLogImpl(const char* format, ...) {
+    char buffer[1024];
+    va_list args;
+    va_start(args, format);
+    vsnprintf(buffer, sizeof(buffer), format, args);
+    va_end(args);
+    OutputDebugStringA(buffer);
+    OutputDebugStringA("\n");
+    fprintf(stderr, "[native-audio-node] %s\n", buffer);
+    fflush(stderr);
+}
+#define DebugLog(...) DebugLogImpl(__VA_ARGS__)
+#else
+#define DebugLog(...) ((void)0)
+#endif
+#else
+#define DebugLog(...) ((void)0)
+#endif
+
 // Forward declarations
 class AudioRecorderWrapper;
 
@@ -420,18 +506,23 @@ Napi::Object MicActivityMonitorWrapper::Init(Napi::Env env, Napi::Object exports
 
 MicActivityMonitorWrapper::MicActivityMonitorWrapper(const Napi::CallbackInfo& info)
     : Napi::ObjectWrap<MicActivityMonitorWrapper>(info) {
+    DebugLog("MicActivityMonitorWrapper: Constructor starting");
     Napi::Env env = info.Env();
 
+    DebugLog("MicActivityMonitorWrapper: Calling mic_activity_create");
     handle_ = mic_activity_create(
         &MicActivityMonitorWrapper::OnChange,
         &MicActivityMonitorWrapper::OnDeviceChange,
         &MicActivityMonitorWrapper::OnError,
         this
     );
+    DebugLog("MicActivityMonitorWrapper: mic_activity_create returned handle=%p", handle_);
 
     if (!handle_) {
+        DebugLog("MicActivityMonitorWrapper: Failed to create monitor");
         Napi::Error::New(env, "Failed to create MicActivityMonitor").ThrowAsJavaScriptException();
     }
+    DebugLog("MicActivityMonitorWrapper: Constructor complete");
 }
 
 MicActivityMonitorWrapper::~MicActivityMonitorWrapper() {
@@ -789,8 +880,13 @@ Napi::Value RequestMicPermission(const Napi::CallbackInfo& info) {
 // ============================================================================
 
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
+    DebugLog("Init: Starting module initialization");
+
     AudioRecorderWrapper::Init(env, exports);
+    DebugLog("Init: AudioRecorderWrapper initialized");
+    
     MicActivityMonitorWrapper::Init(env, exports);
+    DebugLog("Init: MicActivityMonitorWrapper initialized");
 
     // Device enumeration
     exports.Set("listDevices", Napi::Function::New(env, ListDevices));
@@ -807,6 +903,7 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("getMicPermissionStatus", Napi::Function::New(env, GetMicPermissionStatus));
     exports.Set("requestMicPermission", Napi::Function::New(env, RequestMicPermission));
 
+    DebugLog("Init: Module initialization complete");
     return exports;
 }
 
